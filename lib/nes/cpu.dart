@@ -12,6 +12,10 @@ class CPU6502 {
   int Function(int addr)? readCallback;
   void Function(int addr, int value)? writeCallback;
 
+  CPU6502() {
+    _initInstructions();
+  }
+
   int read(int addr) {
     addr &= 0xFFFF;
     return readCallback != null ? readCallback!(addr) : memory[addr];
@@ -52,9 +56,9 @@ class CPU6502 {
 
   static final List<void Function(CPU6502)> _instructions = List.filled(256, _invalid);
   static void _invalid(CPU6502 cpu) { cpu.cycles += 2; }
-  static { _initInstructions(); }
-
-  static void _initInstructions() {
+  static final bool _instructionsInitialized = _initInstructionsStatic();
+  
+  static bool _initInstructionsStatic() {
     // ADC
     _instructions[0x69] = (c) => c._adc(c._imm()); _instructions[0x65] = (c) => c._adc(c._zp());
     _instructions[0x75] = (c) => c._adc(c._zpx()); _instructions[0x6D] = (c) => c._adc(c._abs());
@@ -179,7 +183,10 @@ class CPU6502 {
     _instructions[0x8A] = (c) { c.a = c.x; c.setN(c.a); c.setZ(c.a); c.cycles += 2; };
     _instructions[0x9A] = (c) { c.sp = c.x; c.cycles += 2; };
     _instructions[0x98] = (c) { c.a = c.y; c.setN(c.a); c.setZ(c.a); c.cycles += 2; };
+    return true;
   }
+
+  void _initInstructions() {}
 
   int _imm() { final v = read(pc); pc = (pc + 1) & 0xFFFF; cycles += 2; return v; }
   int _zp() { final a = read(pc); pc = (pc + 1) & 0xFFFF; cycles += 3; return read(a); }
@@ -204,9 +211,9 @@ class CPU6502 {
   void _asl(int a) { var v = read(a); setC((v & 0x80) != 0); v = (v << 1) & 0xFF; write(a, v); setN(v); setZ(v); cycles += 2; }
   void _aslAcc() { setC((a & 0x80) != 0); a = (a << 1) & 0xFF; setN(a); setZ(a); cycles += 2; }
   void _branch(bool c) { final o = read(pc); pc = (pc + 1) & 0xFFFF; if (c) { final old = pc; pc = (pc + (o >= 128 ? o - 256 : o)) & 0xFFFF; cycles += (old & 0xFF00) != (pc & 0xFF00) ? 4 : 3; } else { cycles += 2; } }
-  void _bit(int v) { final r = a & v; setZ(r); setN((v & 0x80) != 0); setV((v & 0x40) != 0); cycles += 2; }
+  void _bit(int v) { final r = a & v; setZ(r); setN((v & 0x80) != 0 ? 1 : 0); setV((v & 0x40) != 0 ? 1 : 0); cycles += 2; }
   void _brk() { pc = (pc + 1) & 0xFFFF; pushStack(pc >> 8); pushStack(pc & 0xFF); pushStack(status | 0x30); status |= 0x04; pc = readWord(0xFFFE); cycles += 7; }
-  void _cmp(int v, int r) { final res = r - v; setC(res >= 0); setZ((res & 0xFF) == 0); setN(res); cycles += 2; }
+  void _cmp(int v, int r) { final res = r - v; setC(res >= 0); setZ((res & 0xFF) == 0 ? 1 : 0); setN(res); cycles += 2; }
   void _dec(int a) { var v = (read(a) - 1) & 0xFF; write(a, v); setN(v); setZ(v); cycles += 2; }
   void _eor(int v) { a ^= v; setN(a); setZ(a); cycles += 2; }
   void _inc(int a) { var v = (read(a) + 1) & 0xFF; write(a, v); setN(v); setZ(v); cycles += 2; }

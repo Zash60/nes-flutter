@@ -26,9 +26,6 @@ class NesEmulatorApp extends StatelessWidget {
         brightness: Brightness.dark,
       ),
       home: const HomeScreen(),
-      routes: {
-        '/emulator': (context) => const EmulatorScreen(),
-      },
       debugShowCheckedModeBanner: false,
     );
   }

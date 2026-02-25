@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import '../nes/emulator.dart';
 
 class EmulatorScreen extends StatefulWidget {
@@ -14,7 +15,7 @@ class EmulatorScreen extends StatefulWidget {
 
 class _EmulatorScreenState extends State<EmulatorScreen> {
   Timer? gameLoop;
-  Uint32List? frameBuffer;
+  ui.Image? frameImage;
   bool showControls = true;
   final Map<int, bool> pressedButtons = {};
 
@@ -36,8 +37,18 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
     gameLoop = Timer.periodic(const Duration(milliseconds: 16), (_) => widget.emulator.step());
   }
 
-  void _onFrameComplete() {
-    if (mounted) setState(() => frameBuffer = widget.emulator.getFrameBufferRGB());
+  void _onFrameComplete() async {
+    if (mounted) {
+      final buffer = widget.emulator.getFrameBufferRGB();
+      final byteData = ByteData.view(buffer.buffer);
+      final img = await ui.decodeImageFromPixels(
+        byteData.buffer.asUint8List(),
+        256,
+        240,
+        ui.PixelFormat.rgba8888,
+      );
+      setState(() => frameImage = img);
+    }
   }
 
   @override
@@ -62,8 +73,8 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
         child: Stack(children: [
           Center(
             child: AspectRatio(aspectRatio: 256 / 240,
-              child: frameBuffer != null
-                ? CustomPaint(painter: FrameBufferPainter(frameBuffer!), size: Size.infinite)
+              child: frameImage != null
+                ? RawImage(image: frameImage, fit: BoxFit.contain)
                 : const Center(child: CircularProgressIndicator(color: Colors.red)))),
           Positioned(top: 0, left: 0, right: 0,
             child: Container(padding: const EdgeInsets.all(8),
@@ -134,17 +145,4 @@ class _EmulatorScreenState extends State<EmulatorScreen> {
         child: Container(padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white54)),
           child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold, letterSpacing: 2))));
-}
-
-class FrameBufferPainter extends CustomPainter {
-  final Uint32List frameBuffer;
-  FrameBufferPainter(this.frameBuffer);
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint();
-    final image = Image.fromBytes(ImageByteFormat.rawRgba, frameBuffer.buffer.asUint8List(), width: 256, height: 240);
-    canvas.drawImageRect(image, Rect.fromLTWH(0, 0, 256, 240), Rect.fromLTWH(0, 0, size.width, size.height), paint);
-  }
-  @override
-  bool shouldRepaint(FrameBufferPainter old) => old.frameBuffer != frameBuffer;
 }
